@@ -1,13 +1,17 @@
-name: Build LoggerPro Mac
+name: Build LoggerPro Mac (M1 + Intel)
 
 on:
   push:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  build-macos:
-    runs-on: macos-latest
+  build-apple-silicon:
+    name: Build Mac Apple Silicon (M1/M2/M3/M4)
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
@@ -16,12 +20,12 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Instalar dependencias e gerar icone .icns
+      - name: Instalar dependencias e gerar icone
         run: |
           pip install customtkinter psutil pillow pyinstaller
           python -c "from loggerpro import IconFactory; IconFactory.ensure_mac_icns()"
 
-      - name: Compilar LoggerPro.app
+      - name: Compilar LoggerPro (Apple Silicon)
         run: |
           pyinstaller --noconsole --windowed --onedir \
             --icon=loggerpro_icon.icns \
@@ -29,17 +33,68 @@ jobs:
             --collect-all PIL \
             --name "LoggerPro" loggerpro.py
 
-      - name: Aplicar permissoes de execucao e Assinatura Ad-Hoc Apple
+      - name: Criar atalho Desbloquear e empacotar DMG
         run: |
-          chmod -R +x dist/LoggerPro.app/Contents/MacOS/
-          codesign --force --deep -s - dist/LoggerPro.app
+          mkdir -p dmg_folder
+          cp -R dist/LoggerPro.app dmg_folder/
+          chmod -R +x dmg_folder/LoggerPro.app/Contents/MacOS/
+          codesign --force --deep -s - dmg_folder/LoggerPro.app
+          cat << 'EOF' > "dmg_folder/1-CLIQUE-AQUI-SE-BLOQUEAR.command"
+          #!/bin/bash
+          DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+          xattr -cr "$DIR/LoggerPro.app"
+          chmod -R +x "$DIR/LoggerPro.app/Contents/MacOS/"
+          open "$DIR/LoggerPro.app"
+          EOF
+          chmod +x "dmg_folder/1-CLIQUE-AQUI-SE-BLOQUEAR.command"
+          hdiutil create -volname "LoggerPro" -srcfolder dmg_folder -ov -format UDZO LoggerPro-Mac-AppleSilicon-M1-M2-M3.dmg
 
-      - name: Criar instalador nativo .DMG (blindado contra perda de permissao)
-        run: |
-          hdiutil create -volname "LoggerPro" -srcfolder dist/LoggerPro.app -ov -format UDZO dist/LoggerPro-Installer.dmg
-
-      - name: Disponibilizar Instalador DMG para Download
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: LoggerPro-macOS-DMG
-          path: dist/LoggerPro-Installer.dmg
+          name: LoggerPro-Mac-AppleSilicon
+          path: LoggerPro-Mac-AppleSilicon-M1-M2-M3.dmg
+
+  build-intel:
+    name: Build Mac Intel (x86_64)
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias e gerar icone
+        run: |
+          pip install customtkinter psutil pillow pyinstaller
+          python -c "from loggerpro import IconFactory; IconFactory.ensure_mac_icns()"
+
+      - name: Compilar LoggerPro (Intel)
+        run: |
+          pyinstaller --noconsole --windowed --onedir \
+            --icon=loggerpro_icon.icns \
+            --collect-all customtkinter \
+            --collect-all PIL \
+            --name "LoggerPro" loggerpro.py
+
+      - name: Criar atalho Desbloquear e empacotar DMG
+        run: |
+          mkdir -p dmg_folder
+          cp -R dist/LoggerPro.app dmg_folder/
+          chmod -R +x dmg_folder/LoggerPro.app/Contents/MacOS/
+          codesign --force --deep -s - dmg_folder/LoggerPro.app
+          cat << 'EOF' > "dmg_folder/1-CLIQUE-AQUI-SE-BLOQUEAR.command"
+          #!/bin/bash
+          DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+          xattr -cr "$DIR/LoggerPro.app"
+          chmod -R +x "$DIR/LoggerPro.app/Contents/MacOS/"
+          open "$DIR/LoggerPro.app"
+          EOF
+          chmod +x "dmg_folder/1-CLIQUE-AQUI-SE-BLOQUEAR.command"
+          hdiutil create -volname "LoggerPro" -srcfolder dmg_folder -ov -format UDZO LoggerPro-Mac-Intel.dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LoggerPro-Mac-Intel
+          path: LoggerPro-Mac-Intel.dmg
