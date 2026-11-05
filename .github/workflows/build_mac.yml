@@ -1,4 +1,4 @@
-name: Build LoggerPro Mac & Windows
+name: Build LoggerPro Mac
 
 on:
   push:
@@ -26,44 +26,20 @@ jobs:
           pyinstaller --noconsole --windowed --onedir \
             --icon=loggerpro_icon.icns \
             --collect-all customtkinter \
+            --collect-all PIL \
             --name "LoggerPro" loggerpro.py
 
-      - name: Empacotar LoggerPro.app em ZIP
+      - name: Aplicar permissoes de execucao e Assinatura Ad-Hoc Apple
         run: |
-          cd dist
-          zip -r -y LoggerPro-macOS.zip LoggerPro.app
+          chmod -R +x dist/LoggerPro.app/Contents/MacOS/
+          codesign --force --deep -s - dist/LoggerPro.app
 
-      - name: Disponibilizar para Download
+      - name: Criar instalador nativo .DMG (blindado contra perda de permissao)
+        run: |
+          hdiutil create -volname "LoggerPro" -srcfolder dist/LoggerPro.app -ov -format UDZO dist/LoggerPro-Installer.dmg
+
+      - name: Disponibilizar Instalador DMG para Download
         uses: actions/upload-artifact@v4
         with:
-          name: LoggerPro-macOS
-          path: dist/LoggerPro-macOS.zip
-
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Instalar Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Instalar dependencias e gerar icone .ico
-        run: |
-          pip install customtkinter psutil pillow pyinstaller
-          python -c "from loggerpro import IconFactory; IconFactory.ensure_ico_file()"
-
-      - name: Compilar LoggerPro.exe
-        run: |
-          pyinstaller --noconsole --onefile \
-            --icon=loggerpro_icon.ico \
-            --add-data "loggerpro_icon.ico;." \
-            --collect-all customtkinter \
-            --name "LoggerPro" loggerpro.py
-
-      - name: Disponibilizar para Download
-        uses: actions/upload-artifact@v4
-        with:
-          name: LoggerPro-Windows
-          path: dist/LoggerPro.exe
+          name: LoggerPro-macOS-DMG
+          path: dist/LoggerPro-Installer.dmg
